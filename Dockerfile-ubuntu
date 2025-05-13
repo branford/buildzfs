@@ -1,0 +1,27 @@
+# docker build --build-arg KERNEL_LEVEL=6.1.0-17 -t gilgal/buildzfs .
+
+FROM ubuntu:22.04 AS downloader
+ARG ZFS_VER
+WORKDIR /
+RUN apt update && apt upgrade -qy && \
+    apt install -y wget && \
+    wget -O openzfs.tgz https://github.com/openzfs/zfs/releases/download/zfs-${ZFS_VER-2.2.6}/zfs-${ZFS_VER-2.2.6}.tar.gz && \
+    tar zxvf openzfs.tgz -C / && mv /zfs-${ZFS_VER-2.2.6} /src
+
+FROM ubuntu:22.04
+LABEL org.opencontainers.image.authors="joshua@gilgal.tw"
+ARG KERNEL_LEVEL
+ENV MAKEENV=deb
+RUN apt update && apt upgrade -qy && \
+    DEBIAN_FRONTEND=noninteractive apt install -qy dpkg-dev linux-headers-${KERNEL_LEVEL-6.1.0-17} \
+    linux-image-${KERNEL_LEVEL-6.1.0-17}-generic autotools-dev devscripts \
+    dh-autoreconf zlib1g-dev uuid-dev libblkid-dev libssl-dev dkms alien python3-packaging \
+    python3-distlib python3-dev python3-setuptools python3-cffi dh-python libaio-dev \
+    libcurl4-openssl-dev libelf-dev libpam0g-dev libudev-dev python3-all-dev python3-sphinx
+# https://bugs.launchpad.net/ubuntu/+source/cpio/+bug/2066157
+# downgrade cpio
+RUN DEBIAN_FRONTEND=noninteractive apt install -qy --allow-downgrades cpio=2.13+dfsg-7
+
+ADD ./run.sh /
+COPY --from=downloader /src /srv/src
+CMD ["/run.sh"]
